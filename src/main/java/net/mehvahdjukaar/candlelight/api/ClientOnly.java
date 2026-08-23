@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
  * present. This lets code reference client-exclusive members without leaking them into
  * non-client distributions.
  *
- * @see net.mehvahdjukaar.candlelight.core.jars_processors.ClientOnlyTransformPlugin
+ * @see net.mehvahdjukaar.candlelight.core.processors.ClientOnlyProcessor
  */
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD, ElementType.CONSTRUCTOR})

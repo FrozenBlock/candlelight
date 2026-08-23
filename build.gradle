@@ -5,7 +5,9 @@ plugins {
 }
 
 group = project.plugin_group
-version = project.plugin_version
+
+def runNumber = System.getenv("GITHUB_RUN_NUMBER")
+version = runNumber != null ? "${project.plugin_version}.${runNumber}" : project.plugin_version
 
 repositories {
     mavenLocal()   // to find locally published dependencies if needed
