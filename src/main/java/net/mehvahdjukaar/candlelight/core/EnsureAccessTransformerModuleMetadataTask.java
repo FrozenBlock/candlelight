@@ -9,7 +9,10 @@ import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.InputFiles;
+import org.gradle.api.tasks.PathSensitive;
+import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
+import org.gradle.api.tasks.UntrackedTask;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +21,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
+@UntrackedTask(because = "mutates getModuleFile() in place, there is no input/output to cache")
 public abstract class EnsureAccessTransformerModuleMetadataTask extends DefaultTask {
 
     private static final String LIBRARY_VARIANT_NAME = "accessTransformersElements2";
@@ -25,9 +29,11 @@ public abstract class EnsureAccessTransformerModuleMetadataTask extends DefaultT
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     @InputFile
+    @PathSensitive(PathSensitivity.RELATIVE)
     public abstract RegularFileProperty getModuleFile();
 
     @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
     public abstract ConfigurableFileCollection getAccessTransformerSources();
 
     @TaskAction
