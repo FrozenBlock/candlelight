@@ -3,6 +3,7 @@ package net.mehvahdjukaar.candlelight.core;
 import net.mehvahdjukaar.candlelight.core.processors.ClassProcessor;
 import net.mehvahdjukaar.candlelight.core.processors.ClientOnlyProcessor;
 import net.mehvahdjukaar.candlelight.core.processors.PlatImplProcessor;
+import net.mehvahdjukaar.candlelight.core.processors.ServerOnlyProcessor;
 import org.gradle.api.Project;
 import org.jetbrains.annotations.Nullable;
 import org.objectweb.asm.AnnotationVisitor;
@@ -29,13 +30,15 @@ import java.util.zip.ZipOutputStream;
 
 /**
  * Runs candlelight's bytecode transforms (see {@link PlatImplProcessor},
- * {@link ClientOnlyProcessor}) against an already-built jar, rewriting it in place.
+ * {@link ClientOnlyProcessor}, {@link ServerOnlyProcessor}) against an already-built jar,
+ * rewriting it in place.
  */
 public final class TransformJarAction {
 
     private static final List<ClassProcessor> PROCESSORS = List.of(
             new PlatImplProcessor(),
-            new ClientOnlyProcessor()
+            new ClientOnlyProcessor(),
+            new ServerOnlyProcessor()
     );
 
     private static final List<String> OUR_ANNOTATIONS = PROCESSORS.stream()

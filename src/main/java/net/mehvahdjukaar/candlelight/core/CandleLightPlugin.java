@@ -28,6 +28,7 @@ public class CandleLightPlugin implements Plugin<Project> {
 
         clExtension.getLogging().convention(true);
         clExtension.getClientOnly().convention(true);
+        clExtension.getServerOnly().convention(true);
 
         configureNeoForgeModuleMetadata(project);
 
