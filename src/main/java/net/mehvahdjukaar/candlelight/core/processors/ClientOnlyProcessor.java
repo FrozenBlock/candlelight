@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Rewrites {@code @ClientOnly} into the loader-specific client-side-only annotation
  * ({@code @Environment(EnvType.CLIENT)} on Fabric, {@code @OnlyIn(Dist.CLIENT)} on
- * Forge/NeoForge).
+ * Forge).
  */
 public class ClientOnlyProcessor implements ClassProcessor {
 
@@ -18,8 +18,7 @@ public class ClientOnlyProcessor implements ClassProcessor {
 
     private enum LoaderType {
         FABRIC("net.fabricmc.api.Environment", "Lnet/fabricmc/api/EnvType;", "CLIENT"),
-        FORGE("net.minecraftforge.api.distmarker.OnlyIn", "Lnet/minecraftforge/api/distmarker/Dist;", "CLIENT"),
-        NEOFORGE("net.neoforged.api.distmarker.OnlyIn", "Lnet/neoforged/api/distmarker/Dist;", "CLIENT");
+        FORGE("net.minecraftforge.api.distmarker.OnlyIn", "Lnet/minecraftforge/api/distmarker/Dist;", "CLIENT");
 
         final String annotationDesc;
         final String enumValueDesc;
@@ -34,7 +33,7 @@ public class ClientOnlyProcessor implements ClassProcessor {
         static LoaderType infer(String projectName) {
             String n = projectName.toLowerCase();
             if (n.contains("fabric")) return FABRIC;
-            if (n.contains("neoforge")) return NEOFORGE;
+            if (n.contains("neoforge")) return null;
             if (n.contains("forge")) return FORGE;
             return null;
         }
