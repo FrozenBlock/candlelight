@@ -48,8 +48,8 @@ publishing {
 }
 
 dependencies {
-    implementation("org.ow2.asm:asm:9.5")
-    implementation("org.ow2.asm:asm-commons:9.5")
+    implementation("org.ow2.asm:asm:9.9.1")
+    implementation("org.ow2.asm:asm-commons:9.9.1")
     implementation("com.google.code.gson:gson:2.11.0")
 
     //implementation("net.neoforged:srgutils:1.0.11")

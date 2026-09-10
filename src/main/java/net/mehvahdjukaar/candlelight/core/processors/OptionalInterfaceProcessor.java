@@ -1,9 +1,7 @@
 package net.mehvahdjukaar.candlelight.core.processors;
 
-import net.mehvahdjukaar.candlelight.core.CandleLightExtension;
-import net.mehvahdjukaar.candlelight.core.CandleLightPlugin;
+import net.mehvahdjukaar.candlelight.core.TransformContext;
 import net.mehvahdjukaar.candlelight.core.ClassUtils;
-import org.gradle.api.Project;
 import org.objectweb.asm.*;
 
 import java.util.List;
@@ -20,7 +18,7 @@ public class OptionalInterfaceProcessor implements ClassProcessor {
     }
 
     @Override
-    public boolean transform(ClassWriter writer, ClassReader reader, Project project, CandleLightExtension ext) {
+    public boolean transform(ClassWriter writer, ClassReader reader, TransformContext ctx) {
 
         // We use a 1-element array so the anonymous inner class can modify it
         final String[] foundInterface = {null};
@@ -65,7 +63,7 @@ public class OptionalInterfaceProcessor implements ClassProcessor {
                         System.arraycopy(interfaces, 0, newInterfaces, 0, interfaces.length);
                         newInterfaces[interfaces.length] = targetInterface;
 
-                        CandleLightPlugin.log(project, " Added OptionalInterface [" +
+                        ctx.log(" Added OptionalInterface [" +
                                 targetInterface.replace('/', '.') + "] to class: " + name.replace('/', '.'));
 
                         super.visit(version, access, name, signature, superName, newInterfaces);

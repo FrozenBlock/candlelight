@@ -1,12 +1,19 @@
 package net.mehvahdjukaar.candlelight.core;
 
+import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.file.DirectoryProperty;
+import org.gradle.api.logging.Logging;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.publish.tasks.GenerateModuleMetadata;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.api.tasks.bundling.Jar;
+import org.gradle.api.tasks.compile.JavaCompile;
+import org.jetbrains.annotations.Nullable;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,8 +23,8 @@ public class CandleLightPlugin implements Plugin<Project> {
 
     private static final String PREFIX = "[CANDLELIGHT] ";
 
-    public static void log(Project project, String s) {
-        project.getLogger().lifecycle(PREFIX + s);
+    public static void log(String s) {
+        Logging.getLogger("candlelight").lifecycle(PREFIX + s);
     }
 
     @Override
@@ -35,8 +42,20 @@ public class CandleLightPlugin implements Plugin<Project> {
         project.getPlugins().withId("java", plugin -> {
             transformJarInPlace(project, clExtension);
 
+            project.getTasks().withType(JavaCompile.class).configureEach(compileTask -> {
+                trackExtensionInputs(project, compileTask, clExtension);
+                compileTask.doLast(new TransformJavaClassesAction(project, clExtension));
+            });
+
             project.getTasks().configureEach(task -> {
-                if (task.getName().equals("curseforge")) {
+                String name = task.getName();
+                // Kotlin outputs are matched by name to avoid needing the Kotlin Gradle
+                // plugin on this plugin's classpath.
+                if (name.startsWith("compile") && name.endsWith("Kotlin")) {
+                    trackExtensionInputs(project, task, clExtension);
+                    task.doLast(new TransformKotlinClassesAction(project, clExtension));
+                }
+                if (name.equals("curseforge")) {
                     task.dependsOn("jar");
                 }
             });
@@ -147,19 +166,99 @@ public class CandleLightPlugin implements Plugin<Project> {
         return name.equals("jar") || name.equals("shadowJar");
     }
 
+    private static void trackExtensionInputs(Project project, Task compileTask, CandleLightExtension clExtension) {
+        compileTask.getInputs().property("candlelight.loader", project.getName());
+        compileTask.getInputs().property("candlelight.clientOnly", clExtension.getClientOnly());
+        compileTask.getInputs().property("candlelight.serverOnly", clExtension.getServerOnly());
+    }
+
     private void transformJarInPlace(Project project, CandleLightExtension clExtension) {
         project.getTasks().withType(Jar.class).configureEach(jarTask -> {
             if (!isPackagedJarTask(jarTask.getName())) return;
-            jarTask.doLast(t -> {
-                var archiveFile = jarTask.getArchiveFile().get().getAsFile();
-                if (!archiveFile.exists()) return;
-                try {
-                    TransformJarAction.transform(archiveFile, project, clExtension);
-                } catch (IOException e) {
-                    throw new RuntimeException("Candlelight jar transform failed for " + archiveFile, e);
-                }
-            });
+            jarTask.doLast(new TransformArchiveAction(project, clExtension));
         });
+    }
+
+    private abstract static class AbstractTransformAction implements Action<Task> {
+        private final String projectName;
+        private final Provider<Boolean> clientOnly;
+        private final Provider<Boolean> serverOnly;
+        private final Provider<Boolean> logging;
+
+        AbstractTransformAction(Project project, CandleLightExtension clExtension) {
+            this.projectName = project.getName();
+            this.clientOnly = clExtension.getClientOnly();
+            this.serverOnly = clExtension.getServerOnly();
+            this.logging = clExtension.getLogging();
+        }
+
+        TransformContext context() {
+            return new TransformContext(projectName, clientOnly.get(), serverOnly.get(), logging.get());
+        }
+    }
+
+    /** Transforms a {@link JavaCompile} task's output in place right after compilation. */
+    private static class TransformJavaClassesAction extends AbstractTransformAction {
+        TransformJavaClassesAction(Project project, CandleLightExtension clExtension) {
+            super(project, clExtension);
+        }
+
+        @Override
+        public void execute(Task task) {
+            File outputDir = ((JavaCompile) task).getDestinationDirectory().get().getAsFile();
+            transformDirectory(outputDir, context(), task.getName());
+        }
+    }
+
+    private static class TransformKotlinClassesAction extends AbstractTransformAction {
+        TransformKotlinClassesAction(Project project, CandleLightExtension clExtension) {
+            super(project, clExtension);
+        }
+
+        @Override
+        public void execute(Task task) {
+            DirectoryProperty destination = destinationDirectoryOf(task);
+            if (destination == null || !destination.isPresent()) {
+                log("could not locate output of " + task.getName() + ", skipping classes transform");
+                return;
+            }
+            transformDirectory(destination.get().getAsFile(), context(), task.getName());
+        }
+
+        @Nullable
+        private static DirectoryProperty destinationDirectoryOf(Task task) {
+            try {
+                Object value = task.getClass().getMethod("getDestinationDirectory").invoke(task);
+                return value instanceof DirectoryProperty property ? property : null;
+            } catch (ReflectiveOperationException e) {
+                return null;
+            }
+        }
+    }
+
+    private static class TransformArchiveAction extends AbstractTransformAction {
+        TransformArchiveAction(Project project, CandleLightExtension clExtension) {
+            super(project, clExtension);
+        }
+
+        @Override
+        public void execute(Task task) {
+            File archiveFile = ((Jar) task).getArchiveFile().get().getAsFile();
+            if (!archiveFile.exists()) return;
+            try {
+                TransformJarAction.transform(archiveFile, context());
+            } catch (IOException e) {
+                throw new RuntimeException("Candlelight jar transform failed for " + archiveFile, e);
+            }
+        }
+    }
+
+    private static void transformDirectory(File outputDir, TransformContext ctx, String taskName) {
+        try {
+            TransformJarAction.transformDirectoryInPlace(outputDir, ctx);
+        } catch (IOException e) {
+            throw new RuntimeException("Candlelight classes transform failed for " + taskName, e);
+        }
     }
 
     private void configureNeoForgeModuleMetadata(Project project) {

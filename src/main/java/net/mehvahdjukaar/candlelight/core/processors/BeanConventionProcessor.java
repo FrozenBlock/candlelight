@@ -1,9 +1,7 @@
 package net.mehvahdjukaar.candlelight.core.processors;
 
-import net.mehvahdjukaar.candlelight.core.CandleLightExtension;
-import net.mehvahdjukaar.candlelight.core.CandleLightPlugin;
+import net.mehvahdjukaar.candlelight.core.TransformContext;
 import net.mehvahdjukaar.candlelight.core.ClassUtils;
-import org.gradle.api.Project;
 import org.objectweb.asm.*;
 
 import java.util.ArrayList;
@@ -30,7 +28,7 @@ public class BeanConventionProcessor implements ClassProcessor {
     }
 
     @Override
-    public boolean transform(ClassWriter cw, ClassReader cr, Project project, CandleLightExtension ext) {
+    public boolean transform(ClassWriter cw, ClassReader cr, TransformContext ctx) {
         final boolean[] modified = {false};
 
         cr.accept(new ClassVisitor(ASM9, cw) {
@@ -110,7 +108,7 @@ public class BeanConventionProcessor implements ClassProcessor {
                     return;
                 }
 
-                CandleLightPlugin.log(project, " Generating getters for " + className.replace('/', '.'));
+                ctx.log(" Generating getters for " + className.replace('/', '.'));
 
                 for (MethodData m : candidates) {
 
@@ -172,7 +170,7 @@ public class BeanConventionProcessor implements ClassProcessor {
                     mv.visitMaxs(0, 0);
                     mv.visitEnd();
 
-                    CandleLightPlugin.log(project, "  + generated " +
+                    ctx.log("  + generated " +
                             (isGetter ? "getter" : "setter") + ": " + alias
                     );
 

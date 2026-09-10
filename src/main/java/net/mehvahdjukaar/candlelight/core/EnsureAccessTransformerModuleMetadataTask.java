@@ -64,14 +64,14 @@ public abstract class EnsureAccessTransformerModuleMetadataTask extends DefaultT
 
         File accessTransformerFile = findAccessTransformerFile(publishedName);
         if (accessTransformerFile == null) {
-            CandleLightPlugin.log(getProject(),
+            CandleLightPlugin.log(
                     "Skipping access transformer module metadata: no file found for " + publishedName);
             return;
         }
 
         variants.add(buildAccessTransformerLibraryVariant(accessTransformerFile, publishedName));
         Files.writeString(moduleFile.toPath(), GSON.toJson(json));
-        CandleLightPlugin.log(getProject(),
+        CandleLightPlugin.log(
                 "Added " + LIBRARY_VARIANT_NAME + " variant to module metadata (" + publishedName + ")");
     }
 

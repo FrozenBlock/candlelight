@@ -4,7 +4,6 @@ import net.mehvahdjukaar.candlelight.core.processors.ClassProcessor;
 import net.mehvahdjukaar.candlelight.core.processors.ClientOnlyProcessor;
 import net.mehvahdjukaar.candlelight.core.processors.PlatImplProcessor;
 import net.mehvahdjukaar.candlelight.core.processors.ServerOnlyProcessor;
-import org.gradle.api.Project;
 import org.jetbrains.annotations.Nullable;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
@@ -30,8 +29,8 @@ import java.util.zip.ZipOutputStream;
 
 /**
  * Runs candlelight's bytecode transforms (see {@link PlatImplProcessor},
- * {@link ClientOnlyProcessor}, {@link ServerOnlyProcessor}) against an already-built jar,
- * rewriting it in place.
+ * {@link ClientOnlyProcessor}, {@link ServerOnlyProcessor}) against compiled classes, either
+ * a compile task's output directory or an already-built jar, rewriting them in place.
  */
 public final class TransformJarAction {
 
@@ -41,17 +40,53 @@ public final class TransformJarAction {
             new ServerOnlyProcessor()
     );
 
-    private static final List<String> OUR_ANNOTATIONS = PROCESSORS.stream()
-            .flatMap(p -> p.usedAnnotations().stream())
-            .distinct()
-            .toList();
-
     private TransformJarAction() {
     }
 
-    public static void transform(File jarFile, Project project, CandleLightExtension ext) throws IOException {
+    static void transformDirectoryInPlace(File classesDir, TransformContext ctx) throws IOException {
+        if (!classesDir.isDirectory()) {
+            return;
+        }
+        List<ClassProcessor> processors = activeProcessors(ctx);
+        if (processors.isEmpty()) {
+            return;
+        }
+        List<String> annotations = annotationsOf(processors);
+
         long startMillis = System.currentTimeMillis();
-        CandleLightPlugin.log(project, "processing annotations");
+        // Each class is read and pre-scanned exactly once, and nothing is logged until a
+        // class is actually about to be rewritten.
+        ClassUtils.walkClasses(classesDir, file -> {
+            byte[] inputBytes = ClassUtils.readAllBytes(file);
+            if (!needsTransform(inputBytes, annotations)) {
+                return;
+            }
+            byte[] outputBytes = applyProcessors(inputBytes, processors, ctx);
+            if (outputBytes == null) {
+                return;
+            }
+            ctx.log(" transformed: " + classesDir.toPath().relativize(file.toPath()));
+            Files.write(file.toPath(), outputBytes);
+        });
+
+        if (ctx.hasLoggedHeader()) {
+            long elapsedMillis = System.currentTimeMillis() - startMillis;
+            ctx.log(String.format("Transformation finished in %d ms", elapsedMillis));
+        }
+    }
+
+    public static void transform(File jarFile, TransformContext ctx) throws IOException {
+        List<ClassProcessor> processors = activeProcessors(ctx);
+        if (processors.isEmpty()) {
+            return;
+        }
+        List<String> annotations = annotationsOf(processors);
+
+        if (!containsAnnotatedClass(jarFile, annotations)) {
+            return;
+        }
+
+        long startMillis = System.currentTimeMillis();
 
         File tmp = File.createTempFile("candlelight-", ".jar", jarFile.getAbsoluteFile().getParentFile());
         boolean anyChanged = false;
@@ -65,10 +100,11 @@ public final class TransformJarAction {
                     data = in.readAllBytes();
                 }
 
-                if (!entry.isDirectory() && entry.getName().endsWith(".class")) {
-                    byte[] transformed = transformClass(data, project, ext);
+                if (!entry.isDirectory() && entry.getName().endsWith(".class")
+                        && needsTransform(data, annotations)) {
+                    byte[] transformed = applyProcessors(data, processors, ctx);
                     if (transformed != null) {
-                        CandleLightPlugin.log(project, " transformed: " + entry.getName());
+                        ctx.log(" transformed: " + entry.getName());
                         data = transformed;
                         anyChanged = true;
                     }
@@ -94,26 +130,56 @@ public final class TransformJarAction {
         }
 
         long elapsedMillis = System.currentTimeMillis() - startMillis;
-        CandleLightPlugin.log(project, String.format("Transformation finished in %d ms", elapsedMillis));
+        ctx.log(String.format("Transformation finished in %d ms", elapsedMillis));
     }
 
-    private static byte @Nullable [] transformClass(byte[] input, Project project, CandleLightExtension ext) {
-        // PASS 1: Lightweight pre-scan - only care about annotations, so skip code/debug info.
-        ClassReader scanReader = new ClassReader(input);
-        PreScannerVisitor scanner = new PreScannerVisitor();
-        scanReader.accept(scanner, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
-        if (!scanner.shouldTransform) {
-            return null; // Exit early - no expensive ClassWriter work.
-        }
+    private static List<ClassProcessor> activeProcessors(TransformContext ctx) {
+        return PROCESSORS.stream().filter(p -> p.isActive(ctx)).toList();
+    }
 
+    private static List<String> annotationsOf(List<ClassProcessor> processors) {
+        return processors.stream()
+                .flatMap(p -> p.usedAnnotations().stream())
+                .distinct()
+                .toList();
+    }
+
+    private static boolean containsAnnotatedClass(File jarFile, List<String> annotations) throws IOException {
+        try (ZipFile zipIn = new ZipFile(jarFile)) {
+            Enumeration<? extends ZipEntry> entries = zipIn.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                if (entry.isDirectory() || !entry.getName().endsWith(".class")) {
+                    continue;
+                }
+                byte[] data;
+                try (InputStream in = zipIn.getInputStream(entry)) {
+                    data = in.readAllBytes();
+                }
+                if (needsTransform(data, annotations)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean needsTransform(byte[] input, List<String> annotations) {
+        ClassReader scanReader = new ClassReader(input);
+        PreScannerVisitor scanner = new PreScannerVisitor(annotations);
+        scanReader.accept(scanner, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+        return scanner.shouldTransform;
+    }
+
+    /** Returns the rewritten bytes, or {@code null} if no processor changed anything. */
+    private static byte @Nullable [] applyProcessors(byte[] input, List<ClassProcessor> processors, TransformContext ctx) {
+        ctx.logHeaderOnce();
         boolean changed = false;
-        for (ClassProcessor processor : PROCESSORS) {
+        for (ClassProcessor processor : processors) {
             ClassReader cr = new ClassReader(input);
             ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
 
-            boolean success = processor.transform(cw, cr, project, ext);
-
-            if (success) {
+            if (processor.transform(cw, cr, ctx)) {
                 input = cw.toByteArray();
                 changed = true;
             }
@@ -122,15 +188,17 @@ public final class TransformJarAction {
     }
 
     private static class PreScannerVisitor extends ClassVisitor {
+        private final List<String> annotations;
         private boolean shouldTransform = false;
 
-        PreScannerVisitor() {
+        PreScannerVisitor(List<String> annotations) {
             super(Opcodes.ASM9);
+            this.annotations = annotations;
         }
 
         @Override
         public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-            if (OUR_ANNOTATIONS.contains(desc)) shouldTransform = true;
+            if (annotations.contains(desc)) shouldTransform = true;
             return null;
         }
 
@@ -139,7 +207,7 @@ public final class TransformJarAction {
             return new FieldVisitor(Opcodes.ASM9) {
                 @Override
                 public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-                    if (OUR_ANNOTATIONS.contains(desc)) shouldTransform = true;
+                    if (annotations.contains(desc)) shouldTransform = true;
                     return null;
                 }
             };
@@ -150,7 +218,7 @@ public final class TransformJarAction {
             return new MethodVisitor(Opcodes.ASM9) {
                 @Override
                 public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
-                    if (OUR_ANNOTATIONS.contains(desc)) shouldTransform = true;
+                    if (annotations.contains(desc)) shouldTransform = true;
                     return null;
                 }
             };

@@ -1,7 +1,6 @@
 package net.mehvahdjukaar.candlelight.core.processors;
 
-import net.mehvahdjukaar.candlelight.core.CandleLightExtension;
-import org.gradle.api.Project;
+import net.mehvahdjukaar.candlelight.core.TransformContext;
 import org.objectweb.asm.*;
 
 import java.util.List;
@@ -49,10 +48,13 @@ abstract class DistOnlyProcessor implements ClassProcessor {
     }
 
     @Override
-    public boolean transform(ClassWriter writer, ClassReader reader, Project project, CandleLightExtension ext) {
-        if (!isEnabled(ext)) return false;
+    public boolean isActive(TransformContext ctx) {
+        return isEnabled(ctx) && LoaderType.infer(ctx.getProjectName()) != null;
+    }
 
-        LoaderType loader = LoaderType.infer(project.getName());
+    @Override
+    public boolean transform(ClassWriter writer, ClassReader reader, TransformContext ctx) {
+        LoaderType loader = LoaderType.infer(ctx.getProjectName());
         if (loader == null) return false;
 
         AtomicBoolean modified = new AtomicBoolean(false);
@@ -99,7 +101,7 @@ abstract class DistOnlyProcessor implements ClassProcessor {
         return modified.get();
     }
 
-    protected abstract boolean isEnabled(CandleLightExtension ext);
+    protected abstract boolean isEnabled(TransformContext ctx);
 
     private AnnotationVisitor rewrite(AnnotationVisitor newAv, AtomicBoolean modified, LoaderType loader) {
         modified.set(true);

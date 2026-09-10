@@ -1,9 +1,7 @@
 package net.mehvahdjukaar.candlelight.core.processors;
 
-import net.mehvahdjukaar.candlelight.core.CandleLightExtension;
-import net.mehvahdjukaar.candlelight.core.CandleLightPlugin;
+import net.mehvahdjukaar.candlelight.core.TransformContext;
 import net.mehvahdjukaar.candlelight.core.ClassUtils;
-import org.gradle.api.Project;
 import org.objectweb.asm.*;
 
 import java.util.ArrayList;
@@ -22,8 +20,7 @@ public class PlatImplProcessor implements ClassProcessor {
     }
 
     @Override
-    public boolean transform(ClassWriter writer, ClassReader reader,
-                             Project project, CandleLightExtension ext) {
+    public boolean transform(ClassWriter writer, ClassReader reader, TransformContext ctx) {
 
         final String[] className = new String[1];
         final boolean[] modified = {false};
@@ -60,7 +57,7 @@ public class PlatImplProcessor implements ClassProcessor {
         }
 
         // Second pass: write class, skipping original annotated methods
-        String implInternalName = computeImplInternalName(className[0], ext);
+        String implInternalName = computeImplInternalName(className[0]);
         ClassVisitor cv = new ClassVisitor(ASM9, writer) {
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor,
@@ -79,7 +76,7 @@ public class PlatImplProcessor implements ClassProcessor {
                 // Add the replacement methods
                 for (MethodInfo mi : methodsToReplace) {
                     addDelegatingMethod(writer, mi, implInternalName);
-                    CandleLightPlugin.log(project,
+                    ctx.log(
                             " Replaced method: " + className[0].replace('/', '.') + "#" + mi.name);
                 }
                 super.visitEnd();
@@ -162,7 +159,7 @@ public class PlatImplProcessor implements ClassProcessor {
         }
     }
 
-    private static String computeImplInternalName(String originalInternalName, CandleLightExtension ext) {
+    private static String computeImplInternalName(String originalInternalName) {
         String platPackage = "platform";
         int lastSlash = originalInternalName.lastIndexOf('/');
         String pkg = lastSlash >= 0 ? originalInternalName.substring(0, lastSlash) : "";

@@ -1,6 +1,6 @@
 package net.mehvahdjukaar.candlelight.core.processors;
 
-import net.mehvahdjukaar.candlelight.core.CandleLightExtension;
+import net.mehvahdjukaar.candlelight.core.TransformContext;
 
 /**
  * Rewrites {@code @ClientOnly} into the loader-specific client-side-only annotation
@@ -16,7 +16,7 @@ public class ClientOnlyProcessor extends DistOnlyProcessor {
     }
 
     @Override
-    protected boolean isEnabled(CandleLightExtension ext) {
-        return ext.getClientOnly().get();
+    protected boolean isEnabled(TransformContext ctx) {
+        return ctx.isClientOnly();
     }
 }
