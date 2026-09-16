@@ -14,11 +14,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 abstract class DistOnlyProcessor implements ClassProcessor {
 
     private final String candlelightAnnotation;
-    private final String distConstant;
+    private final String fabricName;
+    private final String neoName;
 
-    DistOnlyProcessor(String candlelightAnnotation, String distConstant) {
+    DistOnlyProcessor(String candlelightAnnotation, String fabricName, String neoName) {
         this.candlelightAnnotation = candlelightAnnotation;
-        this.distConstant = distConstant;
+        this.fabricName = fabricName;
+        this.neoName = neoName;
     }
 
     private enum LoaderType {
@@ -108,7 +110,7 @@ abstract class DistOnlyProcessor implements ClassProcessor {
         return new AnnotationVisitor(Opcodes.ASM9, newAv) {
             @Override
             public void visitEnd() {
-                newAv.visitEnum("value", loader.enumValueDesc, distConstant);
+                newAv.visitEnum("value", loader.enumValueDesc, loader == LoaderType.FABRIC ? fabricName : neoName);
                 super.visitEnd();
             }
 

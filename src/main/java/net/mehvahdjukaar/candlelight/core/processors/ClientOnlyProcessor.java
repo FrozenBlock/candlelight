@@ -12,7 +12,7 @@ public class ClientOnlyProcessor extends DistOnlyProcessor {
     private static final String CLIENT_ONLY = "Lnet/mehvahdjukaar/candlelight/api/ClientOnly;";
 
     public ClientOnlyProcessor() {
-        super(CLIENT_ONLY, "CLIENT");
+        super(CLIENT_ONLY, "CLIENT", "CLIENT");
     }
 
     @Override

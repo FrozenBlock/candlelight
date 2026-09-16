@@ -12,7 +12,7 @@ public class ServerOnlyProcessor extends DistOnlyProcessor {
     private static final String SERVER_ONLY = "Lnet/mehvahdjukaar/candlelight/api/ServerOnly;";
 
     public ServerOnlyProcessor() {
-        super(SERVER_ONLY, "DEDICATED_SERVER");
+        super(SERVER_ONLY, "SERVER", "DEDICATED_SERVER");
     }
 
     @Override
